@@ -1,31 +1,41 @@
 import { Injectable } from '@nestjs/common';
 
-import { v4 } from 'uuid';
+import { CartItem, PrismaClient, Status } from '@prisma/client';
+import { CartWithCartItem } from '../models';
 
-import { Cart } from '../models';
+const prisma = new PrismaClient();
 
 @Injectable()
 export class CartService {
-  private userCarts: Record<string, Cart> = {};
+  async findByUserId(userId: string): Promise<CartWithCartItem> {
+    const cart = await prisma.cart.findFirst({
+      where: {
+        user_id: userId,
+        status: Status.OPEN,
+      },
+      include: {
+        cart_item: true,
+      },
+    });
 
-  findByUserId(userId: string): Cart {
-    return this.userCarts[ userId ];
+    return cart;
   }
 
-  createByUserId(userId: string) {
-    const id = v4(v4());
-    const userCart = {
-      id,
-      items: [],
-    };
-
-    this.userCarts[ userId ] = userCart;
-
+  async createByUserId(userId: string): Promise<CartWithCartItem> {
+    const userCart = await prisma.cart.create({
+      data: {
+        user_id: userId,
+        status: Status.OPEN,
+      },
+      include: {
+        cart_item: true,
+      },
+    });
     return userCart;
   }
 
-  findOrCreateByUserId(userId: string): Cart {
-    const userCart = this.findByUserId(userId);
+  async findOrCreateByUserId(userId: string): Promise<CartWithCartItem> {
+    const userCart = await this.findByUserId(userId);
 
     if (userCart) {
       return userCart;
@@ -34,22 +44,49 @@ export class CartService {
     return this.createByUserId(userId);
   }
 
-  updateByUserId(userId: string, { items }: Cart): Cart {
-    const { id, ...rest } = this.findOrCreateByUserId(userId);
+  async updateByUserId(
+    userId: string,
+    items: CartItem[],
+  ): Promise<CartWithCartItem> {
+    const cart = await this.findByUserId(userId);
 
-    const updatedCart = {
-      id,
-      ...rest,
-      items: [ ...items ],
-    }
-
-    this.userCarts[ userId ] = { ...updatedCart };
+    const updatedCart = await prisma.cart.update({
+      where: {
+        id: cart.id,
+      },
+      data: {
+        cart_item: {
+          createMany: {
+            data: items,
+          },
+        },
+      },
+      include: {
+        cart_item: true,
+      },
+    });
 
     return { ...updatedCart };
   }
 
-  removeByUserId(userId): void {
-    this.userCarts[ userId ] = null;
+  checkoutForUserId(userId: string) {
+    return prisma.cart.updateMany({
+      where: {
+        user_id: userId,
+        status: Status.OPEN,
+      },
+      data: {
+        status: Status.ORDERED,
+      },
+    });
   }
 
+  async removeByUserId(userId: string): Promise<void> {
+    await prisma.cart.deleteMany({
+      where: {
+        user_id: userId,
+        status: Status.OPEN,
+      },
+    });
+  }
 }

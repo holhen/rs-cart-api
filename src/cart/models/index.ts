@@ -1,17 +1,5 @@
-export type Product = {
-  id: string,
-  title: string,
-  description: string,
-  price: number,
-};
+import { Cart, CartItem } from '@prisma/client';
 
-
-export type CartItem = {
-  product: Product,
-  count: number,
-}
-
-export type Cart = {
-  id: string,
-  items: CartItem[],
+export interface CartWithCartItem extends Cart {
+  cart_item: CartItem[];
 }
